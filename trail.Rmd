@@ -1,0 +1,326 @@
+---
+title: "EAL Performance Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    source_code: embed
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(shiny)
+library(shinyBS)
+library(bubbles)
+library(colorspace)
+library(janitor)
+```
+
+Sidebar {.sidebar}
+=======================================================================
+
+### cran.rstudio.com
+
+The streaming data is a 1-week-delayed livestream of download
+logs from  cran.rstudio.com. The server code for that service is at [jcheng5/cransim](https://github.com/jcheng5/cransim).
+
+
+```{r}
+# Rate at which to flag high download traffic
+airbnb_data = read_csv("nyc_airbnb.csv")
+
+airbnb_data = airbnb_data %>%
+  mutate(rating = review_scores_location / 2) %>%
+  select(boro = neighbourhood_group, neighbourhood, rating, price, room_type,
+         lat, long) %>%
+  filter(!is.na(rating)) 
+
+boros = airbnb_data %>% 
+  group_by(boro) %>% 
+  tally() %>% 
+  adorn_totals("row", name = "Cumulative") %>% 
+  select(boro)
+
+textInput("boro_choosing", label = h3("Pick App"), 
+          placeholder = "Input Key Business Function", value = "Manhattan")
+
+selectInput("boro_choice", label = h3("Select boro"),
+            choices = boros, selected = "Cumulative")
+
+
+# for analysis
+place_holder = "Insert App Description Here"
+textAreaInput("text_to_explain", 
+              label = h4("App Description Here"), 
+              placeholder = place_holder)
+
+bsTooltip(id = "text_to_explain", title = "For Use on Second Tab", 
+          placement = "bottom", trigger = "hover")
+
+addTooltip(session, id = "text_to_explain", title = "For Use on Second Tab",
+           placement = "bottom", trigger = "hover")
+
+
+tags$style(HTML('#predict{background-color:#0c64a3}'))
+actionButton("predict","Evaluate")
+
+```
+
+
+Dashboard
+=======================================================================
+
+Row
+-----------------------------------------------------------------------
+
+### Apps Coded in Domino {.value-box}
+
+```{r}
+# downloadRate is a reactive expression that computes the download
+# rate during this dashboard's lifetime.
+
+# Emit the download rate
+
+#apps coded in domino/days since deploy/cumulative spend
+
+getvalue = reactive ({
+  airbnb_data 
+})
+
+renderValueBox({
+  good = getvalue() %>% 
+    group_by(boro) %>% 
+    summarize(price = mean(price)*100) %>% 
+    adorn_totals("row", name = "Cumulative") %>% 
+    filter(boro == input$boro_choice)
+  valueBox(
+    value = as.integer(good[2]),
+    icon = "fa-area-chart",
+    color = if (as.integer(good[2]) >= 0) "warning" else "primary"
+  )
+})
+```
+
+### Transformation Investment {.value-box}
+
+```{r}
+# dlCount is a reactive expression that keeps track of the total
+# number of rows that have ever appeared through pkgStream.
+
+getvalue = reactive ({
+  airbnb_data 
+})
+
+renderValueBox({
+  good = getvalue() %>% 
+    group_by(boro) %>% 
+    summarize(price = mean(price)*100) %>% 
+    adorn_totals("row", name = "Cumulative") %>% 
+    filter(boro == input$boro_choice)
+  valueBox(
+    value = as.integer(good[2]),
+    icon = "fa-area-chart",
+    color = if (as.integer(good[2]) >= 0) "warning" else "primary"
+  )
+})
+```
+
+### Total Investment {.value-box}
+
+```{r}
+# usrCount is a reactive expression that keeps an approximate
+# count of all of the unique users that have been seen since the
+# app started.
+
+
+getvalue = reactive ({
+  airbnb_data 
+})
+
+renderValueBox({
+  good = getvalue() %>% 
+    group_by(boro) %>% 
+    summarize(price = mean(price)) %>% 
+    adorn_totals("row", name = "Cumulative") %>% 
+    filter(boro == input$boro_choice)
+  valueBox(
+    value = as.integer(good[2]),
+    icon = "fa-area-chart",
+    color = if (as.integer(good[2]) >= 0) "warning" else "primary"
+  )
+})
+
+
+```
+
+Row
+-----------------------------------------------------------------------
+
+### Downloads per sec (last 5 min)
+
+```{r}
+getguage = reactive ({
+  airbnb_data 
+})
+
+renderGauge({
+  rate <- getguage() %>% 
+    group_by(boro) %>% 
+    summarize(price = mean(price)) %>% 
+    adorn_totals("row", name = "Cumulative") %>% 
+    filter(boro == input$boro_choice)
+  gauge(as.integer(rate[2]),
+        min = 0, 
+          max = 200, 
+          sectors = gaugeSectors(success = c(0.5, 1), 
+                                 warning = c(0.3, 0.5),
+                                 danger = c(0, 0.3)
+  ))
+})
+
+
+```
+
+### Average downloads per user
+
+```{r}
+app_name <- reactive({
+  app_namer <- regex(pattern = input$boro_choosing)
+  app_namer
+})
+
+renderGauge({
+  rate <- getguage() %>% 
+    group_by(boro) %>% 
+    summarize(price = mean(price)) %>% 
+    adorn_totals("row", name = "Cumulative") %>% 
+    filter(boro == app_name())
+  gauge(as.integer(rate[2]),
+        min = 0, 
+        max = 200, 
+        sectors = gaugeSectors(success = c(0.5, 1), 
+                                 warning = c(0.3, 0.5),
+                                 danger = c(0, 0.3)
+  ))
+})
+```
+
+### Downloads per sec (last 5 min)
+
+```{r}
+
+
+renderGauge({
+  rate <- getguage() %>% 
+    group_by(boro) %>% 
+    summarize(price = mean(price)) %>% 
+    adorn_totals("row", name = "Cumulative") %>% 
+    filter(boro == input$boro_choice)
+  gauge(as.integer(rate[2]),
+        min = 0,
+        max = 200, 
+        symbol = '%',
+        label = "Hello",
+        sectors = gaugeSectors(success = c(0.5, 1), 
+                                 warning = c(0.3, 0.5),
+                                 danger = c(0, 0.3)
+  ))
+})
+```
+
+Row
+-----------------------------------------------------------------------
+
+### Popularity by package (last 5 min) {data-width=700}
+
+```{r}
+renderBubbles({
+    
+  df <- getguage() %>%
+    group_by(boro, neighbourhood) %>%
+    tally(sort = T) %>% 
+    mutate(new =
+    case_when(input$boro_choice == "Cumulative" ~ "Cumulative",
+              TRUE ~ boro)) %>% 
+    filter(new == input$boro_choice) %>% 
+    head(40)
+
+  bubbles(df$n, 
+          df$neighbourhood, 
+          key = df$neighbourhood,
+          color = rainbow_hcl(nrow(df)))
+})
+```
+
+### Percent of downloads (last 5 min) {data-width=340}
+
+```{r}
+library(packcircles)
+library(viridis)
+renderPlot ({
+
+data = getguage() %>%  
+   group_by(boro, neighbourhood) %>%
+    tally(sort = T) %>% 
+    mutate(new =
+    case_when(input$boro_choice == "Cumulative" ~ "Cumulative",
+              TRUE ~ boro)) %>% 
+    filter(new == input$boro_choice) 
+
+packing <- circleProgressiveLayout(data$n, sizetype='area')
+data <- cbind(data, packing)
+dat.gg <- circleLayoutVertices(packing, npoints=50)
+
+
+ggplot() + 
+  geom_polygon(data = dat.gg, 
+               aes(x, y, group = id, fill=as.factor(id)), colour = "black", alpha = 0.6) +
+  scale_fill_manual(values = magma(nrow(data))) +
+  geom_text(data = data, aes(x, y, size=n, label = neighbourhood)) +
+  scale_size_continuous(range = c(1,4)) +
+  theme_void() + 
+  theme(legend.position="none") +
+  coord_equal()    
+})
+```
+
+Proposal Assessment 
+=======================================================================
+
+Row
+-----------------------------------------------------------------------
+
+### Prediction 
+
+### Business Impact Score (Partial Depedency Plot)
+
+
+Row
+-----------------------------------------------------------------------
+
+### Supplementary Data
+```{r}
+```
+
+
+
+
+
+Metric Definitions 
+=======================================================================
+
+Row
+-----------------------------------------------------------------------
+
+### __Fragility__
+
+### Modernization
+
+### Brand Equity
+
+Row
+-----------------------------------------------------------------------
+### __Additional Considerations__
+
+Here I'll have to put some sort of information
